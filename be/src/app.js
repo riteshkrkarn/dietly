@@ -7,7 +7,7 @@ const app = express();
 // CORS configuration
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN,
+    origin: process.env.CORS_ORIGIN || "http://localhost:5173",
     credentials: true,
   })
 );
@@ -23,7 +23,10 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "OK", message: "Server is running" });
 });
 
-// Routes will be imported here
+// Routes
+import scanRouter from "./routes/scan-routes.js";
+app.use("/api/v1/scan", scanRouter);
+
 // import userRouter from "./routes/user.routes.js";
 // app.use("/api/v1/users", userRouter);
 
