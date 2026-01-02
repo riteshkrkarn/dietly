@@ -15,7 +15,13 @@ const nutritionFormSchema = z.object({
   nutrients: z.array(nutrientSchema).min(1, "At least one nutrient required"),
 });
 
-const NutritionForm = ({ nutrients, servingSize, productName, onSubmit }) => {
+const NutritionForm = ({
+  nutrients,
+  servingSize,
+  productName,
+  onSubmit,
+  loading,
+}) => {
   const {
     register,
     control,
@@ -144,9 +150,21 @@ const NutritionForm = ({ nutrients, servingSize, productName, onSubmit }) => {
       {/* Submit Button */}
       <button
         type="submit"
-        className="w-full py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-medium rounded-xl hover:shadow-lg hover:shadow-green-500/30 transition-all"
+        disabled={loading}
+        className={`w-full py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2 ${
+          loading
+            ? "opacity-70 cursor-not-allowed"
+            : "hover:shadow-lg hover:shadow-green-500/30"
+        }`}
       >
-        ✓ Confirm & Continue
+        {loading ? (
+          <>
+            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            Getting Suggestions...
+          </>
+        ) : (
+          "✓ Confirm & Continue"
+        )}
       </button>
     </form>
   );

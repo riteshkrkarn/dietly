@@ -25,7 +25,10 @@ app.get("/health", (req, res) => {
 
 // Routes
 import scanRouter from "./routes/scan-routes.js";
+import chatRouter from "./routes/chat-routes.js";
+
 app.use("/api/v1/scan", scanRouter);
+app.use("/api/v1/chat", chatRouter);
 
 // import userRouter from "./routes/user.routes.js";
 // app.use("/api/v1/users", userRouter);

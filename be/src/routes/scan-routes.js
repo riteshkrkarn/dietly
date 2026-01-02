@@ -4,6 +4,7 @@ import {
   scanIngredients,
   scanAndAnalyzeNutrition,
   scanAndAnalyzeNutritionStream,
+  getSuggestions,
 } from "../controllers/scan-controller.js";
 
 const router = Router();
@@ -18,5 +19,8 @@ router.route("/analyze").post(upload.single("image"), scanAndAnalyzeNutrition);
 router
   .route("/analyze/stream")
   .post(upload.single("image"), scanAndAnalyzeNutritionStream);
+
+// Get suggestions based on confirmed nutrients
+router.route("/suggestions").post(getSuggestions);
 
 export default router;

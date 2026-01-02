@@ -1,6 +1,6 @@
 /**
- * Simple AI Agent Logger
- * Tracks all agent activities with timestamps
+ * Orchestrator Agent Logger
+ * Tracks agent decisions and tool calls
  */
 
 class AgentLogger {
@@ -12,7 +12,7 @@ class AgentLogger {
   startSession() {
     this.sessionId = `session_${Date.now()}`;
     this.logs = [];
-    this.log("session_start", { message: "Agent session started" });
+    this.log("orchestrator_start", { message: "Orchestrator agent started" });
     return this.sessionId;
   }
 
@@ -25,52 +25,54 @@ class AgentLogger {
     };
     this.logs.push(entry);
 
-    // Also log to console with emoji for visibility
+    // Console output with emojis
     const emojis = {
-      session_start: "🚀",
-      session_end: "🏁",
-      tool_call: "🔧",
+      orchestrator_start: "🎯",
+      orchestrator_thinking: "🧠",
+      tool_selected: "🔧",
+      tool_executing: "⚙️",
       tool_result: "✅",
-      llm_start: "🤖",
-      llm_end: "💬",
+      orchestrator_end: "🏁",
       error: "❌",
-      info: "ℹ️",
     };
 
     console.log(
       `${emojis[type] || "📝"} [${type.toUpperCase()}]`,
-      JSON.stringify(data).substring(0, 200)
+      JSON.stringify(data).substring(0, 150)
     );
 
     return entry;
   }
 
-  logToolCall(toolName, args) {
-    return this.log("tool_call", { tool: toolName, args });
+  logThinking(thought) {
+    return this.log("orchestrator_thinking", { thought });
+  }
+
+  logToolSelected(toolName, reason) {
+    return this.log("tool_selected", { tool: toolName, reason });
+  }
+
+  logToolExecuting(toolName, args) {
+    return this.log("tool_executing", { tool: toolName, args });
   }
 
   logToolResult(toolName, result) {
     return this.log("tool_result", {
       tool: toolName,
-      result: result.substring(0, 500),
+      result: typeof result === "string" ? result.substring(0, 200) : result,
     });
   }
 
-  logLLMStart(prompt) {
-    return this.log("llm_start", { promptLength: prompt.length });
-  }
-
-  logLLMEnd(response) {
-    return this.log("llm_end", { responseLength: response?.length || 0 });
-  }
-
   logError(error) {
-    return this.log("error", { message: error.message, stack: error.stack });
+    return this.log("error", {
+      message: error.message,
+      stack: error.stack?.substring(0, 200),
+    });
   }
 
   endSession(summary = {}) {
-    this.log("session_end", {
-      message: "Agent session ended",
+    this.log("orchestrator_end", {
+      message: "Orchestrator agent finished",
       totalLogs: this.logs.length,
       ...summary,
     });
@@ -86,6 +88,5 @@ class AgentLogger {
   }
 }
 
-// Export singleton instance
 export const agentLogger = new AgentLogger();
 export default AgentLogger;

@@ -2,7 +2,8 @@ import { extractTextFromImage } from "../utils/image-parser.js";
 import {
   processNutritionText,
   processNutritionTextWithStreaming,
-} from "../agent/nutrition-agent.js";
+} from "../agent/orchestrator-agent.js";
+import { getNutritionSuggestions } from "../agent/tools/nutrition-tools.js";
 import { asyncHandler } from "../utils/async-handler.js";
 import { ApiResponse } from "../utils/api-response.js";
 import { ApiError } from "../utils/api-error.js";
@@ -136,3 +137,27 @@ export const scanAndAnalyzeNutritionStream = async (req, res) => {
     res.end();
   }
 };
+
+/**
+ * Get suggestions based on confirmed nutrients
+ */
+export const getSuggestions = asyncHandler(async (req, res) => {
+  const { nutrients } = req.body;
+
+  if (!nutrients || !Array.isArray(nutrients)) {
+    throw new ApiError(400, "Please provide nutrients array");
+  }
+
+  console.log("💡 Getting suggestions for", nutrients.length, "nutrients");
+
+  const result = await getNutritionSuggestions.invoke({ nutrients });
+  const suggestions = JSON.parse(result);
+
+  console.log("✅ Generated", suggestions.totalSuggestions, "suggestions");
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, suggestions, "Suggestions generated successfully")
+    );
+});

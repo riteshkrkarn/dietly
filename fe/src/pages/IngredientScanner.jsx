@@ -1,29 +1,20 @@
 import { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import NutritionForm from "../components/NutritionForm";
 
 const IngredientScanner = () => {
+  const navigate = useNavigate();
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
-  const [status, setStatus] = useState("");
-  const [step, setStep] = useState(0);
+  const [suggestions, setSuggestions] = useState(null);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const fileInputRef = useRef(null);
 
-  const steps = [
-    {
-      text: "📸 Reading your image...",
-      subtext: "Extracting text from the label",
-    },
-    {
-      text: "🤖 Finding nutrition info...",
-      subtext: "AI is analyzing the content",
-    },
-    { text: "📋 Almost done...", subtext: "Building your nutrition report" },
-    { text: "✅ Ready!", subtext: "Review the results below" },
-  ];
+  const [statusMessages, setStatusMessages] = useState([]);
 
   const handleFileSelect = (selectedFile) => {
     if (selectedFile && selectedFile.type.startsWith("image/")) {
@@ -31,8 +22,7 @@ const IngredientScanner = () => {
       setPreview(URL.createObjectURL(selectedFile));
       setError("");
       setResult(null);
-      setStep(0);
-      setStatus("");
+      setStatusMessages([]);
     } else {
       setError("Please select a valid image file");
     }
@@ -58,6 +48,10 @@ const IngredientScanner = () => {
     handleFileSelect(e.dataTransfer.files[0]);
   };
 
+  const addStatus = (msg) => {
+    setStatusMessages((prev) => [...prev, msg]);
+  };
+
   const handleAnalyze = async () => {
     if (!file) {
       setError("Please select an image first");
@@ -67,14 +61,12 @@ const IngredientScanner = () => {
     setLoading(true);
     setError("");
     setResult(null);
-    setStep(0);
+    setStatusMessages([]);
 
     const formData = new FormData();
     formData.append("image", file);
 
     try {
-      setStep(1); // Reading image
-
       const response = await fetch(
         "http://localhost:8000/api/v1/scan/analyze/stream",
         { method: "POST", body: formData }
@@ -97,30 +89,21 @@ const IngredientScanner = () => {
             try {
               const event = JSON.parse(line.slice(6));
 
-              switch (event.type) {
-                case "ocr_complete":
-                  setStep(2); // Finding nutrition
-                  break;
-                case "tool_call":
-                  setStep(2);
-                  break;
-                case "tool_result":
-                  setStep(3); // Almost done
-                  break;
-                case "complete":
-                  setStep(4); // Ready
-                  finalData = event.data;
-                  setResult(event.data);
-                  break;
-                case "raw_text":
-                  rawText = event.text;
-                  break;
-                case "error":
-                  setError(event.message);
-                  break;
+              // Show any message from backend
+              if (event.message) {
+                addStatus(event.message);
               }
-            } catch (e) {
-              console.log(e.message);
+
+              if (event.type === "complete") {
+                finalData = event.data;
+                setResult(event.data);
+                setLoading(false);
+              } else if (event.type === "raw_text") {
+                rawText = event.text;
+              } else if (event.type === "error") {
+                setError(event.message);
+              }
+            } catch {
               // Ignore parse errors
             }
           }
@@ -132,7 +115,6 @@ const IngredientScanner = () => {
       }
     } catch (err) {
       setError(err.message || "Failed to analyze");
-    } finally {
       setLoading(false);
     }
   };
@@ -142,18 +124,36 @@ const IngredientScanner = () => {
     setPreview(null);
     setResult(null);
     setError("");
-    setStep(0);
+    setStatusMessages([]);
+    setSuggestions(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleFormSubmit = (data) => {
-    console.log("Form submitted:", data);
-    // TODO: Send to next agent
-    alert("Data ready for next step!\n\n" + JSON.stringify(data, null, 2));
+  const handleFormSubmit = async (data) => {
+    setSuggestionsLoading(true);
+    setSuggestions(null);
+    try {
+      const response = await fetch(
+        "http://localhost:8000/api/v1/scan/suggestions",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nutrients: data.nutrients }),
+        }
+      );
+      const result = await response.json();
+      if (result.data) {
+        setSuggestions(result.data);
+      }
+    } catch (err) {
+      console.error("Failed to get suggestions:", err);
+    } finally {
+      setSuggestionsLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8">
+    <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100 p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
@@ -224,7 +224,7 @@ const IngredientScanner = () => {
             <div className="flex gap-3">
               <button
                 className={`flex-1 py-3 font-semibold rounded-xl flex items-center justify-center gap-2
-                  bg-gradient-to-r from-indigo-500 to-purple-600 text-white transition-all
+                  bg-linear-to-r from-indigo-500 to-purple-600 text-white transition-all
                   ${
                     !file || loading
                       ? "opacity-50 cursor-not-allowed"
@@ -255,34 +255,27 @@ const IngredientScanner = () => {
             {/* Processing Status */}
             {loading && (
               <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                <div className="space-y-3">
-                  {steps.map((s, i) => (
-                    <div
-                      key={i}
-                      className={`flex items-center gap-3 transition-all ${
-                        i + 1 <= step ? "opacity-100" : "opacity-30"
-                      }`}
-                    >
+                <div className="space-y-2">
+                  {statusMessages.map((msg, i) => (
+                    <div key={i} className="flex items-center gap-3">
                       <div
-                        className={`w-6 h-6 rounded-full flex items-center justify-center text-sm
-                          ${
-                            i + 1 < step
-                              ? "bg-green-500 text-white"
-                              : i + 1 === step
-                              ? "bg-indigo-500 text-white animate-pulse"
-                              : "bg-slate-200 text-slate-400"
-                          }`}
+                        className={`w-5 h-5 rounded-full flex items-center justify-center text-xs ${
+                          i === statusMessages.length - 1
+                            ? "bg-indigo-500 text-white animate-pulse"
+                            : "bg-green-500 text-white"
+                        }`}
                       >
-                        {i + 1 < step ? "✓" : i + 1}
+                        {i === statusMessages.length - 1 ? "" : "✓"}
                       </div>
-                      <div>
-                        <p className="font-medium text-slate-700 text-sm">
-                          {s.text}
-                        </p>
-                        <p className="text-xs text-slate-400">{s.subtext}</p>
-                      </div>
+                      <p className="text-sm text-slate-700">{msg}</p>
                     </div>
                   ))}
+                  {statusMessages.length === 0 && (
+                    <div className="flex items-center gap-3">
+                      <span className="w-5 h-5 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
+                      <p className="text-sm text-slate-500">Starting...</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -316,7 +309,47 @@ const IngredientScanner = () => {
                   servingSize={result.report.servingSize}
                   productName={result.report.productName}
                   onSubmit={handleFormSubmit}
+                  loading={suggestionsLoading}
                 />
+
+                {suggestions && suggestions.suggestions && (
+                  <div className="mt-4 space-y-3">
+                    <h3 className="text-sm font-semibold text-slate-700">
+                      💡 AI Suggestions
+                    </h3>
+                    {suggestions.suggestions.map((s, i) => (
+                      <div
+                        key={i}
+                        className="p-3 bg-linear-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-100"
+                      >
+                        <p className="text-sm text-slate-700">{s.insight}</p>
+                        <button
+                          onClick={() =>
+                            navigate(
+                              `/chat?q=${encodeURIComponent(s.question)}`,
+                              {
+                                state: { productContext: result },
+                              }
+                            )
+                          }
+                          className="text-xs text-indigo-600 mt-2 hover:text-indigo-800 hover:underline font-medium"
+                        >
+                          💬 {s.question}
+                        </button>
+                      </div>
+                    ))}
+
+                    {/* Ask custom question button */}
+                    <button
+                      onClick={() =>
+                        navigate("/chat", { state: { productContext: result } })
+                      }
+                      className="w-full mt-2 py-2.5 px-4 bg-indigo-100 text-indigo-700 font-medium rounded-xl hover:bg-indigo-200 transition-colors flex items-center justify-center gap-2"
+                    >
+                      💬 Ask a different question
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="bg-white/50 rounded-2xl p-8 border-2 border-dashed border-slate-200 min-h-[300px] flex flex-col items-center justify-center text-center">
