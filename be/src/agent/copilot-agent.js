@@ -22,23 +22,34 @@ Response format:
 Always respond with valid JSON in this exact structure:
 {
   "reply": "Your helpful response here",
-  "suggestions": ["Follow-up question 1?", "Follow-up question 2?", "Follow-up question 3?"],
-  "actionCards": [
-    {"id": "compare", "label": "Compare with another product", "icon": "🔄"},
-    {"id": "explain", "label": "Explain the ingredients", "icon": "📋"}
-  ]
+  "suggestions": ["Question user might ask?", "Another question?"],
+  "actionCards": [{"id": "...", "label": "...", "icon": "..."}],
+  "preferencePrompt": null
 }
 
 Guidelines for suggestions:
 - These are questions the USER might want to ask YOU next
 - NOT questions you ask the user - the user clicks these to ask you
-- Examples: "Is this high in sodium?", "What are the main ingredients?", "Is this good for weight loss?"
-- Bad examples: "Are you looking for...", "What are your goals?" - these are questions TO the user, not FROM the user
+- Examples: "Is this high in sodium?", "What are the main ingredients?"
 
 Guidelines for actionCards:
-- Generate 2-4 contextual actions based on what would be helpful
-- Common actions: compare, explain ingredients, check for concerns, daily intake fit
-- Only include relevant actions for the current context`;
+- Generate 2-4 contextual actions
+- Common: compare, explain ingredients, check concerns
+
+Guidelines for preferencePrompt:
+- When you detect a health concern (high sodium, sugar, saturated fat, cholesterol, allergens), offer to remember it
+- Set preferencePrompt to: {"key": "watching_sodium", "label": "sodium", "message": "Want me to remember you're watching sodium?"}
+- Keys: watching_sodium, watching_sugar, watching_fat, watching_cholesterol, avoiding_gluten, avoiding_dairy, etc.
+- Only include ONE preferencePrompt per response, for the most significant concern
+- If no concern detected or already mentioned, set preferencePrompt to null`;
+
+// User preferences context (passed from frontend)
+const formatUserPreferences = (preferences) => {
+  if (!preferences || preferences.length === 0) return "";
+
+  return `\n\nUser Health Preferences (personalize your response based on these):
+${preferences.map((p) => `- ${p}`).join("\n")}`;
+};
 
 /**
  * Create the copilot chat model
@@ -80,21 +91,24 @@ const formatProductContext = (productContext) => {
  * @param {string} message - User's message
  * @param {object} productContext - Scanned product data
  * @param {array} chatHistory - Previous messages [{role, content}]
+ * @param {array} userPreferences - User's saved health preferences
  */
 export const processCopilotChat = async (
   message,
   productContext,
-  chatHistory = []
+  chatHistory = [],
+  userPreferences = []
 ) => {
   const agent = createCopilotAgent();
 
-  // Build context
+  // Build context with user preferences
   const productInfo = formatProductContext(productContext);
+  const preferencesInfo = formatUserPreferences(userPreferences);
 
   // Build messages array - system message first, then context as human message
   const messages = [
     new SystemMessage(COPILOT_SYSTEM_PROMPT),
-    new HumanMessage(`Product Context:\n${productInfo}`),
+    new HumanMessage(`Product Context:\n${productInfo}${preferencesInfo}`),
     new AIMessage("I understand. I'll help analyze this product for you."),
   ];
 
@@ -146,6 +160,7 @@ export const processCopilotChat = async (
       reply: parsed.reply,
       suggestions: parsed.suggestions || [],
       actionCards: parsed.actionCards || [],
+      preferencePrompt: parsed.preferencePrompt || null,
     };
   } catch (error) {
     console.error("❌ Copilot Error:", error.message);

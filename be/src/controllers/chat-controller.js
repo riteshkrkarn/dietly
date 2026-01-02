@@ -6,10 +6,10 @@ import { ApiError } from "../utils/api-error.js";
 /**
  * Chat with the copilot
  * POST /api/v1/chat
- * Body: { message, productContext, chatHistory }
+ * Body: { message, productContext, chatHistory, userPreferences }
  */
 export const chat = asyncHandler(async (req, res) => {
-  const { message, productContext, chatHistory } = req.body;
+  const { message, productContext, chatHistory, userPreferences } = req.body;
 
   if (!message || typeof message !== "string") {
     throw new ApiError(400, "Message is required");
@@ -20,7 +20,8 @@ export const chat = asyncHandler(async (req, res) => {
   const result = await processCopilotChat(
     message,
     productContext,
-    chatHistory || []
+    chatHistory || [],
+    userPreferences || []
   );
 
   if (!result.success) {
@@ -34,6 +35,7 @@ export const chat = asyncHandler(async (req, res) => {
         reply: result.reply,
         suggestions: result.suggestions,
         actionCards: result.actionCards,
+        preferencePrompt: result.preferencePrompt,
       },
       "Chat response generated"
     )

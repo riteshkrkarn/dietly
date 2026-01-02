@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
+import { usePreferences } from "../hooks/usePreferences";
 
 const Chat = () => {
   const [searchParams] = useSearchParams();
@@ -10,8 +11,13 @@ const Chat = () => {
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [actionCards, setActionCards] = useState([]);
+  const [preferencePrompt, setPreferencePrompt] = useState(null);
   const messagesEndRef = useRef(null);
   const hasProcessedInitial = useRef(false);
+
+  // User preferences hook
+  const { savePreference, getPreferenceLabels, hasPreference } =
+    usePreferences();
 
   // Get product context from navigation state
   const productContext = location.state?.productContext || null;
@@ -44,6 +50,7 @@ const Chat = () => {
     setInput("");
     setLoading(true);
     setSuggestions([]);
+    setPreferencePrompt(null);
 
     try {
       const response = await fetch("http://localhost:8000/api/v1/chat", {
@@ -53,6 +60,7 @@ const Chat = () => {
           message: messageText,
           productContext,
           chatHistory: messages.slice(-10),
+          userPreferences: getPreferenceLabels(),
         }),
       });
 
@@ -65,6 +73,14 @@ const Chat = () => {
         ]);
         setSuggestions(result.data.suggestions || []);
         setActionCards(result.data.actionCards || []);
+
+        // Show preference prompt if returned and not already saved
+        if (
+          result.data.preferencePrompt &&
+          !hasPreference(result.data.preferencePrompt.key)
+        ) {
+          setPreferencePrompt(result.data.preferencePrompt);
+        }
       } else {
         setMessages((prev) => [
           ...prev,
@@ -80,6 +96,17 @@ const Chat = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSavePreference = () => {
+    if (preferencePrompt) {
+      savePreference(preferencePrompt.key, preferencePrompt.label);
+      setPreferencePrompt(null);
+    }
+  };
+
+  const handleDismissPreference = () => {
+    setPreferencePrompt(null);
   };
 
   // Handle initial question from URL on mount
@@ -188,6 +215,29 @@ const Chat = () => {
                 {s}
               </button>
             ))}
+          </div>
+        )}
+
+        {/* Preference Prompt Card */}
+        {!loading && preferencePrompt && (
+          <div className="mt-3 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl">
+            <p className="text-sm text-slate-700 mb-3">
+              💡 {preferencePrompt.message}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleSavePreference}
+                className="px-4 py-2 text-sm bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
+              >
+                Yes, remember this
+              </button>
+              <button
+                onClick={handleDismissPreference}
+                className="px-4 py-2 text-sm bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300 transition-colors"
+              >
+                Not now
+              </button>
+            </div>
           </div>
         )}
 
