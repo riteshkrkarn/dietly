@@ -51,6 +51,14 @@ const formatUserPreferences = (preferences) => {
 ${preferences.map((p) => `- ${p}`).join("\n")}`;
 };
 
+// Scan history context
+const formatScanHistory = (scanHistory) => {
+  if (!scanHistory || scanHistory.length === 0) return "";
+
+  return `\n\nUser's Recent Scans (you can reference these if relevant):
+${scanHistory.map((s, i) => `${i + 1}. ${s.name} (scanned ${new Date(s.scannedAt).toLocaleDateString()}): ${s.keyNutrients?.join(", ") || "no nutrients recorded"}`).join("\n")}`;
+};
+
 /**
  * Create the copilot chat model
  */
@@ -92,23 +100,28 @@ const formatProductContext = (productContext) => {
  * @param {object} productContext - Scanned product data
  * @param {array} chatHistory - Previous messages [{role, content}]
  * @param {array} userPreferences - User's saved health preferences
+ * @param {array} scanHistory - User's recent scan summaries
  */
 export const processCopilotChat = async (
   message,
   productContext,
   chatHistory = [],
-  userPreferences = []
+  userPreferences = [],
+  scanHistory = []
 ) => {
   const agent = createCopilotAgent();
 
-  // Build context with user preferences
+  // Build context with user preferences and scan history
   const productInfo = formatProductContext(productContext);
   const preferencesInfo = formatUserPreferences(userPreferences);
+  const historyInfo = formatScanHistory(scanHistory);
 
   // Build messages array - system message first, then context as human message
   const messages = [
     new SystemMessage(COPILOT_SYSTEM_PROMPT),
-    new HumanMessage(`Product Context:\n${productInfo}${preferencesInfo}`),
+    new HumanMessage(
+      `Product Context:\n${productInfo}${preferencesInfo}${historyInfo}`
+    ),
     new AIMessage("I understand. I'll help analyze this product for you."),
   ];
 

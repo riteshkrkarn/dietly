@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { usePreferences } from "../hooks/usePreferences";
+import { useScanHistory } from "../hooks/useScanHistory";
 
 const Chat = () => {
   const [searchParams] = useSearchParams();
@@ -18,6 +19,9 @@ const Chat = () => {
   // User preferences hook
   const { savePreference, getPreferenceLabels, hasPreference } =
     usePreferences();
+
+  // Scan history hook
+  const { getScanSummaries } = useScanHistory();
 
   // Get product context from navigation state
   const productContext = location.state?.productContext || null;
@@ -61,6 +65,7 @@ const Chat = () => {
           productContext,
           chatHistory: messages.slice(-10),
           userPreferences: getPreferenceLabels(),
+          scanHistory: getScanSummaries(),
         }),
       });
 

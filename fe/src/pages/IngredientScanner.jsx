@@ -1,9 +1,10 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import NutritionForm from "../components/NutritionForm";
-
+import { useScanHistory } from "../hooks/useScanHistory";
 const IngredientScanner = () => {
   const navigate = useNavigate();
+  const { addScan, getRecentScans } = useScanHistory();
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [result, setResult] = useState(null);
@@ -141,9 +142,11 @@ const IngredientScanner = () => {
           body: JSON.stringify({ nutrients: data.nutrients }),
         }
       );
-      const result = await response.json();
-      if (result.data) {
-        setSuggestions(result.data);
+      const apiResult = await response.json();
+      if (apiResult.data) {
+        setSuggestions(apiResult.data);
+        // Auto-save scan to history
+        addScan(result);
       }
     } catch (err) {
       console.error("Failed to get suggestions:", err);
@@ -364,6 +367,35 @@ const IngredientScanner = () => {
             )}
           </div>
         </div>
+
+        {/* Recent Scans Section */}
+        {getRecentScans(5).length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-lg font-semibold text-slate-700 mb-3">
+              📋 Recent Scans
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+              {getRecentScans(5).map((scan) => (
+                <button
+                  key={scan.id}
+                  onClick={() =>
+                    navigate("/chat", {
+                      state: { productContext: scan.fullResult },
+                    })
+                  }
+                  className="p-3 bg-white border border-slate-200 rounded-xl hover:border-indigo-300 hover:shadow-sm transition-all text-left"
+                >
+                  <p className="font-medium text-slate-700 text-sm truncate">
+                    {scan.productName}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {new Date(scan.scannedAt).toLocaleDateString()}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
