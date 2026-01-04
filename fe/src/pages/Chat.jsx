@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { usePreferences } from "../hooks/usePreferences";
-import { useScanHistory } from "../hooks/useScanHistory";
 
 const Chat = () => {
   const [searchParams] = useSearchParams();
@@ -16,14 +15,9 @@ const Chat = () => {
   const messagesEndRef = useRef(null);
   const hasProcessedInitial = useRef(false);
 
-  // User preferences hook
   const { savePreference, getPreferenceLabels, hasPreference } =
     usePreferences();
 
-  // Scan history hook
-  const { getScanSummaries } = useScanHistory();
-
-  // Get product context from navigation state
   const productContext = location.state?.productContext || null;
 
   const scrollToBottom = () => {
@@ -34,7 +28,6 @@ const Chat = () => {
     scrollToBottom();
   }, [messages]);
 
-  // Generate initial action cards based on product context
   useEffect(() => {
     if (productContext && actionCards.length === 0) {
       setActionCards([
@@ -65,7 +58,6 @@ const Chat = () => {
           productContext,
           chatHistory: messages.slice(-10),
           userPreferences: getPreferenceLabels(),
-          scanHistory: getScanSummaries(),
         }),
       });
 
@@ -79,7 +71,6 @@ const Chat = () => {
         setSuggestions(result.data.suggestions || []);
         setActionCards(result.data.actionCards || []);
 
-        // Show preference prompt if returned and not already saved
         if (
           result.data.preferencePrompt &&
           !hasPreference(result.data.preferencePrompt.key)
@@ -114,7 +105,6 @@ const Chat = () => {
     setPreferencePrompt(null);
   };
 
-  // Handle initial question from URL on mount
   useEffect(() => {
     const question = searchParams.get("q");
     if (question && !hasProcessedInitial.current) {
@@ -139,31 +129,13 @@ const Chat = () => {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100 flex flex-col">
-      {/* Header */}
-      <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3">
-        <button
-          onClick={() => navigate("/")}
-          className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-        >
-          ← Back
-        </button>
-        <h1 className="text-lg font-semibold text-slate-800">
-          🤖 Nutrition Copilot
-        </h1>
-        {productContext?.report?.productName && (
-          <span className="ml-auto text-sm text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-            {productContext.report.productName}
-          </span>
-        )}
-      </div>
-
+    <div className="h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex flex-col">
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col">
         {messages.length === 0 && (
-          <div className="text-center text-slate-400 mt-10">
+          <div className="flex-1 flex flex-col items-center justify-center text-center text-gray-500">
             <span className="text-5xl block mb-4">🤖</span>
-            <p className="mb-2">I'm your nutrition copilot!</p>
+            <p className="mb-2 font-medium">I'm your nutrition copilot!</p>
             {productContext ? (
               <p className="text-sm">
                 Ask me anything about this product, or use the quick actions
@@ -180,16 +152,14 @@ const Chat = () => {
         {messages.map((msg, i) => (
           <div
             key={i}
-            className={`flex ${
-              msg.role === "user" ? "justify-end" : "justify-start"
-            }`}
+            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"
+              }`}
           >
             <div
-              className={`max-w-[80%] px-4 py-3 rounded-2xl ${
-                msg.role === "user"
-                  ? "bg-indigo-500 text-white rounded-br-md"
-                  : "bg-white border border-slate-200 text-slate-700 rounded-bl-md"
-              }`}
+              className={`max-w-[80%] px-4 py-3 rounded-2xl ${msg.role === "user"
+                ? "bg-green-600 text-white rounded-br-md"
+                : "bg-white border border-gray-200 text-gray-800 rounded-bl-md"
+                }`}
             >
               {msg.content}
             </div>
@@ -198,11 +168,11 @@ const Chat = () => {
 
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-white border border-slate-200 px-4 py-3 rounded-2xl rounded-bl-md">
+            <div className="bg-white border border-gray-200 px-4 py-3 rounded-2xl rounded-bl-md">
               <span className="inline-flex gap-1">
-                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" />
-                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:0.1s]" />
-                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:0.2s]" />
+                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.1s]" />
+                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.2s]" />
               </span>
             </div>
           </div>
@@ -215,7 +185,7 @@ const Chat = () => {
               <button
                 key={i}
                 onClick={() => sendMessage(s)}
-                className="px-3 py-2 text-sm bg-indigo-50 text-indigo-700 rounded-xl hover:bg-indigo-100 transition-colors"
+                className="px-3 py-2 text-sm bg-green-50 text-green-700 rounded-xl hover:bg-green-100 transition-colors"
               >
                 {s}
               </button>
@@ -225,20 +195,20 @@ const Chat = () => {
 
         {/* Preference Prompt Card */}
         {!loading && preferencePrompt && (
-          <div className="mt-3 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl">
-            <p className="text-sm text-slate-700 mb-3">
+          <div className="mt-3 p-4 bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200 rounded-xl">
+            <p className="text-sm text-gray-700 mb-3">
               💡 {preferencePrompt.message}
             </p>
             <div className="flex gap-2">
               <button
                 onClick={handleSavePreference}
-                className="px-4 py-2 text-sm bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
+                className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
               >
                 Yes, remember this
               </button>
               <button
                 onClick={handleDismissPreference}
-                className="px-4 py-2 text-sm bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300 transition-colors"
+                className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
               >
                 Not now
               </button>
@@ -257,10 +227,10 @@ const Chat = () => {
               <button
                 key={i}
                 onClick={() => handleActionCard(card)}
-                className="flex items-center gap-2 p-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-indigo-300 transition-colors text-left"
+                className="flex items-center gap-2 p-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-green-300 transition-colors text-left"
               >
                 <span className="text-xl">{card.icon}</span>
-                <span className="text-sm text-slate-700">{card.label}</span>
+                <span className="text-sm text-gray-700">{card.label}</span>
               </button>
             ))}
           </div>
@@ -268,7 +238,7 @@ const Chat = () => {
       )}
 
       {/* Input */}
-      <div className="bg-white border-t border-slate-200 p-4">
+      <div className="bg-white border-t border-gray-200 p-4">
         <div className="max-w-3xl mx-auto flex gap-3">
           <input
             type="text"
@@ -276,12 +246,12 @@ const Chat = () => {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ask about this product..."
-            className="flex-1 px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
           />
           <button
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || loading}
-            className="px-6 py-3 bg-indigo-500 text-white font-medium rounded-xl hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-6 py-3 bg-green-600 text-white font-medium rounded-xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Send
           </button>

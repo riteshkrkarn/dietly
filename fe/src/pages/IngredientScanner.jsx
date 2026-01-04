@@ -1,10 +1,9 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import NutritionForm from "../components/NutritionForm";
-import { useScanHistory } from "../hooks/useScanHistory";
+
 const IngredientScanner = () => {
   const navigate = useNavigate();
-  const { addScan, getRecentScans } = useScanHistory();
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [result, setResult] = useState(null);
@@ -90,7 +89,6 @@ const IngredientScanner = () => {
             try {
               const event = JSON.parse(line.slice(6));
 
-              // Show any message from backend
               if (event.message) {
                 addStatus(event.message);
               }
@@ -142,11 +140,9 @@ const IngredientScanner = () => {
           body: JSON.stringify({ nutrients: data.nutrients }),
         }
       );
-      const apiResult = await response.json();
-      if (apiResult.data) {
-        setSuggestions(apiResult.data);
-        // Auto-save scan to history
-        addScan(result);
+      const result = await response.json();
+      if (result.data) {
+        setSuggestions(result.data);
       }
     } catch (err) {
       console.error("Failed to get suggestions:", err);
@@ -156,15 +152,15 @@ const IngredientScanner = () => {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl md:text-4xl font-bold text-slate-800 mb-2">
-            🤖 Nutrition Copilot
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+            📸 Scan Nutrition Label
           </h1>
-          <p className="text-slate-500">
-            Upload a nutrition label to extract and edit the information
+          <p className="text-gray-600">
+            Upload a nutrition label to extract and analyze the information
           </p>
         </div>
 
@@ -172,16 +168,15 @@ const IngredientScanner = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Column - Upload */}
           <div className="space-y-4">
-            {/* Drop Zone - Larger */}
+            {/* Drop Zone */}
             <div
               className={`
                 border-2 border-dashed rounded-2xl text-center cursor-pointer
                 transition-all duration-300 flex flex-col items-center justify-center
                 min-h-[300px] md:min-h-[400px]
-                ${
-                  isDragging
-                    ? "border-indigo-500 bg-indigo-50 scale-[1.02]"
-                    : "border-slate-300 bg-white hover:border-indigo-400 hover:bg-indigo-50/30"
+                ${isDragging
+                  ? "border-green-500 bg-green-50 scale-[1.02]"
+                  : "border-gray-300 bg-white hover:border-green-400 hover:bg-green-50/30"
                 }
               `}
               onDragOver={handleDragOver}
@@ -196,20 +191,20 @@ const IngredientScanner = () => {
                     alt="Preview"
                     className="max-h-[250px] md:max-h-[300px] rounded-xl object-contain shadow-lg"
                   />
-                  <p className="mt-3 text-sm text-slate-500 truncate max-w-full px-4">
+                  <p className="mt-3 text-sm text-gray-600 truncate max-w-full px-4">
                     {file?.name}
                   </p>
                 </div>
               ) : (
-                <div className="text-slate-500 p-8">
+                <div className="text-gray-600 p-8">
                   <span className="text-6xl md:text-7xl block mb-4">📸</span>
                   <p className="text-lg font-medium mb-2">
                     Drop your nutrition label here
                   </p>
-                  <p className="text-sm text-slate-400 mb-4">
+                  <p className="text-sm text-gray-500 mb-4">
                     or click anywhere to browse
                   </p>
-                  <button className="px-4 py-2 bg-indigo-100 text-indigo-600 rounded-lg text-sm font-medium hover:bg-indigo-200 transition-colors">
+                  <button className="px-4 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors">
                     Choose File
                   </button>
                 </div>
@@ -227,11 +222,10 @@ const IngredientScanner = () => {
             <div className="flex gap-3">
               <button
                 className={`flex-1 py-3 font-semibold rounded-xl flex items-center justify-center gap-2
-                  bg-linear-to-r from-indigo-500 to-purple-600 text-white transition-all
-                  ${
-                    !file || loading
-                      ? "opacity-50 cursor-not-allowed"
-                      : "hover:shadow-lg hover:shadow-indigo-500/30"
+                  bg-green-600 text-white transition-all
+                  ${!file || loading
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:bg-green-700 hover:shadow-lg hover:shadow-green-600/20"
                   }`}
                 onClick={handleAnalyze}
                 disabled={!file || loading}
@@ -247,7 +241,7 @@ const IngredientScanner = () => {
               </button>
               {file && (
                 <button
-                  className="px-6 py-3 font-semibold rounded-xl bg-slate-200 text-slate-700 hover:bg-slate-300"
+                  className="px-6 py-3 font-semibold rounded-xl bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors"
                   onClick={handleClear}
                 >
                   Clear
@@ -257,26 +251,25 @@ const IngredientScanner = () => {
 
             {/* Processing Status */}
             {loading && (
-              <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+              <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
                 <div className="space-y-2">
                   {statusMessages.map((msg, i) => (
                     <div key={i} className="flex items-center gap-3">
                       <div
-                        className={`w-5 h-5 rounded-full flex items-center justify-center text-xs ${
-                          i === statusMessages.length - 1
-                            ? "bg-indigo-500 text-white animate-pulse"
+                        className={`w-5 h-5 rounded-full flex items-center justify-center text-xs ${i === statusMessages.length - 1
+                            ? "bg-green-600 text-white animate-pulse"
                             : "bg-green-500 text-white"
-                        }`}
+                          }`}
                       >
                         {i === statusMessages.length - 1 ? "" : "✓"}
                       </div>
-                      <p className="text-sm text-slate-700">{msg}</p>
+                      <p className="text-sm text-gray-700">{msg}</p>
                     </div>
                   ))}
                   {statusMessages.length === 0 && (
                     <div className="flex items-center gap-3">
-                      <span className="w-5 h-5 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
-                      <p className="text-sm text-slate-500">Starting...</p>
+                      <span className="w-5 h-5 border-2 border-green-300 border-t-green-600 rounded-full animate-spin" />
+                      <p className="text-sm text-gray-600">Starting...</p>
                     </div>
                   )}
                 </div>
@@ -294,16 +287,16 @@ const IngredientScanner = () => {
           {/* Right Column - Results */}
           <div className="space-y-4">
             {result?.report ? (
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-bold text-slate-800">
+                  <h2 className="text-lg font-bold text-gray-900">
                     📋 Nutrition Data
                   </h2>
                   <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
                     {result.report.nutrients?.length} nutrients found
                   </span>
                 </div>
-                <p className="text-sm text-slate-500 mb-4">
+                <p className="text-sm text-gray-600 mb-4">
                   Review and edit if there are any errors, then confirm to
                   continue.
                 </p>
@@ -317,15 +310,15 @@ const IngredientScanner = () => {
 
                 {suggestions && suggestions.suggestions && (
                   <div className="mt-4 space-y-3">
-                    <h3 className="text-sm font-semibold text-slate-700">
+                    <h3 className="text-sm font-semibold text-gray-800">
                       💡 AI Suggestions
                     </h3>
                     {suggestions.suggestions.map((s, i) => (
                       <div
                         key={i}
-                        className="p-3 bg-linear-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-100"
+                        className="p-3 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-100"
                       >
-                        <p className="text-sm text-slate-700">{s.insight}</p>
+                        <p className="text-sm text-gray-700">{s.insight}</p>
                         <button
                           onClick={() =>
                             navigate(
@@ -335,7 +328,7 @@ const IngredientScanner = () => {
                               }
                             )
                           }
-                          className="text-xs text-indigo-600 mt-2 hover:text-indigo-800 hover:underline font-medium"
+                          className="text-xs text-green-700 mt-2 hover:text-green-800 hover:underline font-medium"
                         >
                           💬 {s.question}
                         </button>
@@ -347,7 +340,7 @@ const IngredientScanner = () => {
                       onClick={() =>
                         navigate("/chat", { state: { productContext: result } })
                       }
-                      className="w-full mt-2 py-2.5 px-4 bg-indigo-100 text-indigo-700 font-medium rounded-xl hover:bg-indigo-200 transition-colors flex items-center justify-center gap-2"
+                      className="w-full mt-2 py-2.5 px-4 bg-green-100 text-green-700 font-medium rounded-xl hover:bg-green-200 transition-colors flex items-center justify-center gap-2"
                     >
                       💬 Ask a different question
                     </button>
@@ -355,47 +348,18 @@ const IngredientScanner = () => {
                 )}
               </div>
             ) : (
-              <div className="bg-white/50 rounded-2xl p-8 border-2 border-dashed border-slate-200 min-h-[300px] flex flex-col items-center justify-center text-center">
+              <div className="bg-white/50 rounded-2xl p-8 border-2 border-dashed border-gray-200 min-h-[300px] flex flex-col items-center justify-center text-center">
                 <span className="text-5xl mb-4 opacity-50">📊</span>
-                <p className="text-slate-400 font-medium">
+                <p className="text-gray-500 font-medium">
                   Extracted nutrition data will appear here
                 </p>
-                <p className="text-sm text-slate-300 mt-1">
+                <p className="text-sm text-gray-400 mt-1">
                   Upload an image to get started
                 </p>
               </div>
             )}
           </div>
         </div>
-
-        {/* Recent Scans Section */}
-        {getRecentScans(5).length > 0 && (
-          <div className="mt-8">
-            <h2 className="text-lg font-semibold text-slate-700 mb-3">
-              📋 Recent Scans
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-              {getRecentScans(5).map((scan) => (
-                <button
-                  key={scan.id}
-                  onClick={() =>
-                    navigate("/chat", {
-                      state: { productContext: scan.fullResult },
-                    })
-                  }
-                  className="p-3 bg-white border border-slate-200 rounded-xl hover:border-indigo-300 hover:shadow-sm transition-all text-left"
-                >
-                  <p className="font-medium text-slate-700 text-sm truncate">
-                    {scan.productName}
-                  </p>
-                  <p className="text-xs text-slate-400 mt-1">
-                    {new Date(scan.scannedAt).toLocaleDateString()}
-                  </p>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
