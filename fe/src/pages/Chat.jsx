@@ -42,6 +42,9 @@ const Chat = () => {
   const sendMessage = async (messageText) => {
     if (!messageText.trim()) return;
 
+    // Capture current history before updating state (fixes React closure issue)
+    const currentHistory = [...messages];
+
     const userMessage = { role: "user", content: messageText };
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
@@ -56,7 +59,7 @@ const Chat = () => {
         body: JSON.stringify({
           message: messageText,
           productContext,
-          chatHistory: messages.slice(-10),
+          chatHistory: currentHistory.slice(-10),
           userPreferences: getPreferenceLabels(),
         }),
       });
@@ -129,7 +132,7 @@ const Chat = () => {
   };
 
   return (
-    <div className="h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex flex-col">
+    <div className="h-[calc(100vh-5rem)] bg-gradient-to-br from-gray-50 via-white to-gray-100 flex flex-col">
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col">
         {messages.length === 0 && (
@@ -152,14 +155,16 @@ const Chat = () => {
         {messages.map((msg, i) => (
           <div
             key={i}
-            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"
-              }`}
+            className={`flex ${
+              msg.role === "user" ? "justify-end" : "justify-start"
+            }`}
           >
             <div
-              className={`max-w-[80%] px-4 py-3 rounded-2xl ${msg.role === "user"
-                ? "bg-green-600 text-white rounded-br-md"
-                : "bg-white border border-gray-200 text-gray-800 rounded-bl-md"
-                }`}
+              className={`max-w-[80%] px-4 py-3 rounded-2xl ${
+                msg.role === "user"
+                  ? "bg-green-600 text-white rounded-br-md"
+                  : "bg-white border border-gray-200 text-gray-800 rounded-bl-md"
+              }`}
             >
               {msg.content}
             </div>

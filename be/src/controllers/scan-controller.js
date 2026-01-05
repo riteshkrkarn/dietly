@@ -153,7 +153,7 @@ export const getSuggestions = asyncHandler(async (req, res) => {
   const result = await getNutritionSuggestions.invoke({ nutrients });
   const suggestions = JSON.parse(result);
 
-  console.log("✅ Generated", suggestions.totalSuggestions, "suggestions");
+  console.log("✅ Analysis complete:", suggestions.verdict);
 
   return res
     .status(200)

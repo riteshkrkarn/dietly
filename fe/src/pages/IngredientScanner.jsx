@@ -174,9 +174,10 @@ const IngredientScanner = () => {
                 border-2 border-dashed rounded-2xl text-center cursor-pointer
                 transition-all duration-300 flex flex-col items-center justify-center
                 min-h-[300px] md:min-h-[400px]
-                ${isDragging
-                  ? "border-green-500 bg-green-50 scale-[1.02]"
-                  : "border-gray-300 bg-white hover:border-green-400 hover:bg-green-50/30"
+                ${
+                  isDragging
+                    ? "border-green-500 bg-green-50 scale-[1.02]"
+                    : "border-gray-300 bg-white hover:border-green-400 hover:bg-green-50/30"
                 }
               `}
               onDragOver={handleDragOver}
@@ -223,9 +224,10 @@ const IngredientScanner = () => {
               <button
                 className={`flex-1 py-3 font-semibold rounded-xl flex items-center justify-center gap-2
                   bg-green-600 text-white transition-all
-                  ${!file || loading
-                    ? "opacity-50 cursor-not-allowed"
-                    : "hover:bg-green-700 hover:shadow-lg hover:shadow-green-600/20"
+                  ${
+                    !file || loading
+                      ? "opacity-50 cursor-not-allowed"
+                      : "hover:bg-green-700 hover:shadow-lg hover:shadow-green-600/20"
                   }`}
                 onClick={handleAnalyze}
                 disabled={!file || loading}
@@ -256,10 +258,11 @@ const IngredientScanner = () => {
                   {statusMessages.map((msg, i) => (
                     <div key={i} className="flex items-center gap-3">
                       <div
-                        className={`w-5 h-5 rounded-full flex items-center justify-center text-xs ${i === statusMessages.length - 1
+                        className={`w-5 h-5 rounded-full flex items-center justify-center text-xs ${
+                          i === statusMessages.length - 1
                             ? "bg-green-600 text-white animate-pulse"
                             : "bg-green-500 text-white"
-                          }`}
+                        }`}
                       >
                         {i === statusMessages.length - 1 ? "" : "✓"}
                       </div>
@@ -308,39 +311,113 @@ const IngredientScanner = () => {
                   loading={suggestionsLoading}
                 />
 
-                {suggestions && suggestions.suggestions && (
-                  <div className="mt-4 space-y-3">
-                    <h3 className="text-sm font-semibold text-gray-800">
-                      💡 AI Suggestions
-                    </h3>
-                    {suggestions.suggestions.map((s, i) => (
-                      <div
-                        key={i}
-                        className="p-3 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-100"
-                      >
-                        <p className="text-sm text-gray-700">{s.insight}</p>
-                        <button
-                          onClick={() =>
-                            navigate(
-                              `/chat?q=${encodeURIComponent(s.question)}`,
-                              {
-                                state: { productContext: result },
-                              }
-                            )
-                          }
-                          className="text-xs text-green-700 mt-2 hover:text-green-800 hover:underline font-medium"
-                        >
-                          💬 {s.question}
-                        </button>
+                {suggestions && suggestions.summary && (
+                  <div className="mt-4 space-y-4">
+                    {/* Verdict Banner */}
+                    <div
+                      className={`p-4 rounded-xl border-2 ${
+                        suggestions.verdict === "NOT RECOMMENDED"
+                          ? "bg-red-50 border-red-200"
+                          : suggestions.verdict === "PROCEED WITH CAUTION"
+                          ? "bg-amber-50 border-amber-200"
+                          : suggestions.verdict === "RECOMMENDED"
+                          ? "bg-green-50 border-green-200"
+                          : "bg-gray-50 border-gray-200"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-2xl">
+                          {suggestions.verdictEmoji}
+                        </span>
+                        <h3 className="font-bold text-gray-900">
+                          {suggestions.verdict}
+                        </h3>
                       </div>
-                    ))}
 
-                    {/* Ask custom question button */}
+                      {/* Concerns */}
+                      {suggestions.concerns &&
+                        suggestions.concerns.length > 0 && (
+                          <div className="mt-3">
+                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">
+                              Issues Found
+                            </p>
+                            {suggestions.concerns.map((c, i) => (
+                              <div
+                                key={i}
+                                className="mb-2 pl-3 border-l-2 border-red-300"
+                              >
+                                <p className="text-sm font-medium text-gray-800">
+                                  {c.nutrient}:{" "}
+                                  <span className="text-red-600">
+                                    {c.value}
+                                  </span>
+                                </p>
+                                <p className="text-xs text-gray-600">
+                                  {c.reason}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                      {/* Positives */}
+                      {suggestions.positives &&
+                        suggestions.positives.length > 0 && (
+                          <div className="mt-3">
+                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">
+                              Positives
+                            </p>
+                            {suggestions.positives.map((p, i) => (
+                              <div
+                                key={i}
+                                className="mb-2 pl-3 border-l-2 border-green-300"
+                              >
+                                <p className="text-sm font-medium text-gray-800">
+                                  {p.nutrient}:{" "}
+                                  <span className="text-green-600">
+                                    {p.value}
+                                  </span>
+                                </p>
+                                <p className="text-xs text-gray-600">
+                                  {p.reason}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                    </div>
+
+                    {/* Follow-up Questions */}
+                    {suggestions.followUpQuestions &&
+                      suggestions.followUpQuestions.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                            Ask the Copilot
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {suggestions.followUpQuestions.map((q, i) => (
+                              <button
+                                key={i}
+                                onClick={() =>
+                                  navigate(`/chat?q=${encodeURIComponent(q)}`, {
+                                    state: { productContext: result },
+                                  })
+                                }
+                                className="px-3 py-2 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors border border-green-200"
+                              >
+                                💬 {q}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                    {/* Custom question button */}
                     <button
                       onClick={() =>
                         navigate("/chat", { state: { productContext: result } })
                       }
-                      className="w-full mt-2 py-2.5 px-4 bg-green-100 text-green-700 font-medium rounded-xl hover:bg-green-200 transition-colors flex items-center justify-center gap-2"
+                      className="w-full py-2.5 px-4 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
                     >
                       💬 Ask a different question
                     </button>
