@@ -185,4 +185,17 @@ Consider leaner alternatives.
 
 ---
 
-*Built for Hackathon 2026*
+## Future
+
+**Better UI**  
+Real-time typing effects, animated agent transitions, and a cleaner mobile experience.
+
+**Open Food Facts API**  
+Compare scanned products against a database of 3M+ products. Get recommendations like "This has 40% less sugar than similar cereals."
+
+**LangGraph Integration**  
+Migrate from sequential agent calls to LangGraph's state machine. Enables conditional branching, parallel agent execution, and more complex reasoning flows.
+
+---
+
+*Built for Encode 2026*
