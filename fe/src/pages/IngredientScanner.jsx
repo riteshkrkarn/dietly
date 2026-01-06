@@ -20,7 +20,9 @@ const IngredientScanner = () => {
 
   // Connect to WebSocket on mount
   useEffect(() => {
-    socketRef.current = io("http://localhost:8000");
+    socketRef.current = io(
+      import.meta.env.VITE_API_URL || "http://localhost:8000"
+    );
 
     socketRef.current.on("connect", () => {
       console.log("🔌 Connected to WebSocket:", socketRef.current.id);
@@ -130,7 +132,9 @@ const IngredientScanner = () => {
 
     try {
       const response = await fetch(
-        `http://localhost:8000/api/v1/scan/analyze/stream?socketId=${socketId}`,
+        `${
+          import.meta.env.VITE_API_URL || "http://localhost:8000"
+        }/api/v1/scan/analyze/stream?socketId=${socketId}`,
         { method: "POST", body: formData }
       );
 
@@ -206,7 +210,9 @@ const IngredientScanner = () => {
 
     try {
       const response = await fetch(
-        "http://localhost:8000/api/v1/scan/reanalyze",
+        `${
+          import.meta.env.VITE_API_URL || "http://localhost:8000"
+        }/api/v1/scan/reanalyze`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
