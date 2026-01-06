@@ -26,6 +26,34 @@ That's useless. You want to know: **Should I eat this or not?**
 3. **Goal-Oriented** — Analysis tied to YOUR intent, not generic health advice
 4. **No Filler** — Zero "Great question!" or "I'd be happy to help"
 
+### Transparent Assumptions
+
+The copilot **tells you what it's assuming** before acting:
+
+```
+🎯 "I'm assuming you're checking this for heart health"
+   [protein source] [quick energy] [diet compliance]
+```
+
+- **Agree?** It proceeds on your behalf with focused analysis
+- **Disagree?** Click an alternative — it re-analyzes instantly
+
+No silent assumptions. No guessing games.
+
+### Knows Its Limits
+
+When data is incomplete or context matters, it says so:
+
+```
+"I can only see 6 nutrients. Without fiber data, I can't 
+assess digestive impact."
+
+"For someone with hypertension, this is risky. For a 
+healthy athlete post-workout, it's fine."
+```
+
+It doesn't pretend to know what it doesn't.
+
 ---
 
 ## How It Works
@@ -56,16 +84,6 @@ Your nutrition label goes through 4 specialized agents:
 └─────────────────────────────────────────────┘
      ↓
 📊 Verdict + Concerns + Recommendation
-```
-
-### Intent Override
-
-AI assumed wrong? Click to re-analyze with a different goal.
-
-```
-🎯 "I'm assuming you're checking this for heart health"
-   [protein source] [quick energy] [diet compliance]
-   ↑ Click any to re-analyze
 ```
 
 ---
