@@ -99,20 +99,24 @@ Your nutrition label goes through 4 specialized agents:
 
 ---
 
-## Quick Start
+## Run It
+
+**Prerequisites:** Node.js 18+, [Gemini API key](https://aistudio.google.com/apikey)
 
 ```bash
-# Backend
+# 1. Clone and setup backend
 cd be
-echo "GEMINI_API_KEY=your_key" > .env
-npm install && npm run dev
+npm install
+echo "GEMINI_API_KEY=your_key_here" > .env
+npm run dev
 
-# Frontend
+# 2. In another terminal, setup frontend
 cd fe
-npm install && npm run dev
+npm install
+npm run dev
 ```
 
-Open `http://localhost:5173`
+Open **http://localhost:5173** → Upload a nutrition label → Get verdict
 
 ---
 
