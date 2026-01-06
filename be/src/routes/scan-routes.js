@@ -5,6 +5,7 @@ import {
   scanAndAnalyzeNutrition,
   scanAndAnalyzeNutritionStream,
   getSuggestions,
+  reanalyze,
 } from "../controllers/scan-controller.js";
 
 const router = Router();
@@ -22,5 +23,8 @@ router
 
 // Get suggestions based on confirmed nutrients
 router.route("/suggestions").post(getSuggestions);
+
+// Re-analyze with a different intent
+router.route("/reanalyze").post(reanalyze);
 
 export default router;

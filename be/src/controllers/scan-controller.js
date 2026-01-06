@@ -2,6 +2,7 @@ import { extractTextFromImage } from "../utils/image-parser.js";
 import {
   processNutritionText,
   processNutritionTextWithStreaming,
+  reAnalyzeWithIntent,
 } from "../agent/orchestrator-agent.js";
 import { getNutritionSuggestions } from "../agent/tools/nutrition-tools.js";
 import { asyncHandler } from "../utils/async-handler.js";
@@ -82,7 +83,7 @@ export const scanAndAnalyzeNutrition = asyncHandler(async (req, res) => {
 });
 
 /**
- * SSE Streaming endpoint - Real-time agent updates
+ * SSE Streaming endpoint - Real-time agent updates + WebSocket
  */
 export const scanAndAnalyzeNutritionStream = async (req, res) => {
   if (!req.file) {
@@ -91,6 +92,8 @@ export const scanAndAnalyzeNutritionStream = async (req, res) => {
   }
 
   const imagePath = req.file.path;
+  const socketId = req.query.socketId; // Get socket ID from query
+  const io = req.app.get("io");
 
   // Set up SSE headers
   res.setHeader("Content-Type", "text/event-stream");
@@ -99,9 +102,14 @@ export const scanAndAnalyzeNutritionStream = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.flushHeaders();
 
-  // Helper to send SSE events
+  // Helper to send SSE events AND WebSocket events
   const sendEvent = (event) => {
     res.write(`data: ${JSON.stringify(event)}\n\n`);
+
+    // Also emit via WebSocket if socket ID provided
+    if (socketId && io) {
+      io.to(socketId).emit("scan_event", event);
+    }
   };
 
   try {
@@ -160,4 +168,34 @@ export const getSuggestions = asyncHandler(async (req, res) => {
     .json(
       new ApiResponse(200, suggestions, "Suggestions generated successfully")
     );
+});
+
+/**
+ * Re-analyze with a different intent
+ */
+export const reanalyze = asyncHandler(async (req, res) => {
+  const { nutrients, productName, newIntent } = req.body;
+
+  if (!nutrients || !Array.isArray(nutrients)) {
+    throw new ApiError(400, "Please provide nutrients array");
+  }
+  if (!newIntent) {
+    throw new ApiError(400, "Please provide newIntent");
+  }
+
+  console.log("🔄 Re-analyzing with intent:", newIntent);
+
+  const parsedData = {
+    nutrients,
+    productName: productName || "Unknown Product",
+    success: true,
+  };
+
+  const result = await reAnalyzeWithIntent(parsedData, newIntent);
+
+  console.log("✅ Re-analysis complete:", result.analysis?.verdict);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, result, "Re-analysis complete"));
 });

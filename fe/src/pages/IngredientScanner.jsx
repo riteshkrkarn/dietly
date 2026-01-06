@@ -1,5 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { io } from "socket.io-client";
 import NutritionForm from "../components/NutritionForm";
 
 const IngredientScanner = () => {
@@ -10,11 +11,69 @@ const IngredientScanner = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
-  const [suggestions, setSuggestions] = useState(null);
-  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const fileInputRef = useRef(null);
 
   const [statusMessages, setStatusMessages] = useState([]);
+  const [typingText, setTypingText] = useState("");
+  const [currentAgent, setCurrentAgent] = useState(null);
+  const socketRef = useRef(null);
+
+  // Connect to WebSocket on mount
+  useEffect(() => {
+    socketRef.current = io("http://localhost:8000");
+
+    socketRef.current.on("connect", () => {
+      console.log("🔌 Connected to WebSocket:", socketRef.current.id);
+    });
+
+    // Handle scan events from WebSocket (deduplicate messages)
+    const handleEvent = (event) => {
+      if (event.message) {
+        setStatusMessages((prev) => {
+          // Avoid duplicate consecutive messages
+          if (prev.length > 0 && prev[prev.length - 1] === event.message) {
+            return prev;
+          }
+          return [...prev, event.message];
+        });
+      }
+      if (event.type === "agent_start") {
+        setCurrentAgent(event.agent);
+      }
+    };
+
+    socketRef.current.on("scan_event", handleEvent);
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+    };
+  }, []);
+
+  // Typing effect for analysis text
+  const typingIndexRef = useRef(0);
+  const typingIntervalRef = useRef(null);
+
+  const typeText = (text) => {
+    // Clear any existing interval
+    if (typingIntervalRef.current) {
+      clearInterval(typingIntervalRef.current);
+    }
+
+    typingIndexRef.current = 0;
+    setTypingText("");
+
+    typingIntervalRef.current = setInterval(() => {
+      if (typingIndexRef.current < text.length) {
+        setTypingText(text.substring(0, typingIndexRef.current + 1));
+        typingIndexRef.current++;
+      } else {
+        clearInterval(typingIntervalRef.current);
+        typingIntervalRef.current = null;
+      }
+    }, 20);
+  };
 
   const handleFileSelect = (selectedFile) => {
     if (selectedFile && selectedFile.type.startsWith("image/")) {
@@ -23,6 +82,8 @@ const IngredientScanner = () => {
       setError("");
       setResult(null);
       setStatusMessages([]);
+      setTypingText("");
+      setCurrentAgent(null);
     } else {
       setError("Please select a valid image file");
     }
@@ -48,10 +109,6 @@ const IngredientScanner = () => {
     handleFileSelect(e.dataTransfer.files[0]);
   };
 
-  const addStatus = (msg) => {
-    setStatusMessages((prev) => [...prev, msg]);
-  };
-
   const handleAnalyze = async () => {
     if (!file) {
       setError("Please select an image first");
@@ -62,13 +119,18 @@ const IngredientScanner = () => {
     setError("");
     setResult(null);
     setStatusMessages([]);
+    setTypingText("");
+    setCurrentAgent(null);
 
     const formData = new FormData();
     formData.append("image", file);
 
+    // Get socket ID for WebSocket events
+    const socketId = socketRef.current?.id || "";
+
     try {
       const response = await fetch(
-        "http://localhost:8000/api/v1/scan/analyze/stream",
+        `http://localhost:8000/api/v1/scan/analyze/stream?socketId=${socketId}`,
         { method: "POST", body: formData }
       );
 
@@ -89,14 +151,18 @@ const IngredientScanner = () => {
             try {
               const event = JSON.parse(line.slice(6));
 
-              if (event.message) {
-                addStatus(event.message);
-              }
+              // Don't addStatus here - WebSocket handles status display
+              // SSE is only for data completion
 
               if (event.type === "complete") {
                 finalData = event.data;
                 setResult(event.data);
                 setLoading(false);
+
+                // Trigger typing effect for analysis
+                if (event.data?.report?.analysis?.analysis) {
+                  typeText(event.data.report.analysis.analysis);
+                }
               } else if (event.type === "raw_text") {
                 rawText = event.text;
               } else if (event.type === "error") {
@@ -124,30 +190,59 @@ const IngredientScanner = () => {
     setResult(null);
     setError("");
     setStatusMessages([]);
-    setSuggestions(null);
+    setTypingText("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleFormSubmit = async (data) => {
-    setSuggestionsLoading(true);
-    setSuggestions(null);
+  // State for intent override loading
+  const [reanalyzeLoading, setReanalyzeLoading] = useState(false);
+
+  // Handle clicking an alternative intent button
+  const handleIntentOverride = async (newIntent) => {
+    if (!result?.report?.nutrients) return;
+
+    setReanalyzeLoading(true);
+    setTypingText("");
+
     try {
       const response = await fetch(
-        "http://localhost:8000/api/v1/scan/suggestions",
+        "http://localhost:8000/api/v1/scan/reanalyze",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ nutrients: data.nutrients }),
+          body: JSON.stringify({
+            nutrients: result.report.nutrients,
+            productName: result.report.productName,
+            newIntent: newIntent,
+          }),
         }
       );
-      const result = await response.json();
-      if (result.data) {
-        setSuggestions(result.data);
+
+      const data = await response.json();
+
+      if (data.data) {
+        // Update result with new analysis while keeping original nutrients
+        setResult((prev) => ({
+          ...prev,
+          report: {
+            ...prev.report,
+            intent: data.data.intent,
+            filter: data.data.filter,
+            analysis: data.data.analysis,
+            summary: data.data.summary,
+          },
+        }));
+
+        // Trigger typing effect for new analysis
+        if (data.data.analysis?.analysis) {
+          typeText(data.data.analysis.analysis);
+        }
       }
     } catch (err) {
-      console.error("Failed to get suggestions:", err);
+      console.error("Re-analysis failed:", err);
+      setError("Failed to re-analyze with new intent");
     } finally {
-      setSuggestionsLoading(false);
+      setReanalyzeLoading(false);
     }
   };
 
@@ -251,34 +346,6 @@ const IngredientScanner = () => {
               )}
             </div>
 
-            {/* Processing Status */}
-            {loading && (
-              <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-                <div className="space-y-2">
-                  {statusMessages.map((msg, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <div
-                        className={`w-5 h-5 rounded-full flex items-center justify-center text-xs ${
-                          i === statusMessages.length - 1
-                            ? "bg-green-600 text-white animate-pulse"
-                            : "bg-green-500 text-white"
-                        }`}
-                      >
-                        {i === statusMessages.length - 1 ? "" : "✓"}
-                      </div>
-                      <p className="text-sm text-gray-700">{msg}</p>
-                    </div>
-                  ))}
-                  {statusMessages.length === 0 && (
-                    <div className="flex items-center gap-3">
-                      <span className="w-5 h-5 border-2 border-green-300 border-t-green-600 rounded-full animate-spin" />
-                      <p className="text-sm text-gray-600">Starting...</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
             {/* Error */}
             {error && (
               <div className="p-4 bg-red-50 text-red-600 rounded-xl text-center border border-red-100">
@@ -287,144 +354,236 @@ const IngredientScanner = () => {
             )}
           </div>
 
-          {/* Right Column - Results */}
+          {/* Right Column - Status & Results */}
           <div className="space-y-4">
-            {result?.report ? (
+            {/* Show status messages during loading */}
+            {loading && (
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-bold text-gray-900">
-                    📋 Nutrition Data
-                  </h2>
-                  <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
-                    {result.report.nutrients?.length} nutrients found
-                  </span>
-                </div>
-                <p className="text-sm text-gray-600 mb-4">
-                  Review and edit if there are any errors, then confirm to
-                  continue.
-                </p>
-                <NutritionForm
-                  nutrients={result.report.nutrients}
-                  servingSize={result.report.servingSize}
-                  productName={result.report.productName}
-                  onSubmit={handleFormSubmit}
-                  loading={suggestionsLoading}
-                />
-
-                {suggestions && suggestions.summary && (
-                  <div className="mt-4 space-y-4">
-                    {/* Verdict Banner */}
+                <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <span className="animate-spin">⚡</span> Analyzing...
+                </h2>
+                <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                  {statusMessages.map((msg, i) => (
                     <div
-                      className={`p-4 rounded-xl border-2 ${
-                        suggestions.verdict === "NOT RECOMMENDED"
-                          ? "bg-red-50 border-red-200"
-                          : suggestions.verdict === "PROCEED WITH CAUTION"
-                          ? "bg-amber-50 border-amber-200"
-                          : suggestions.verdict === "RECOMMENDED"
-                          ? "bg-green-50 border-green-200"
-                          : "bg-gray-50 border-gray-200"
+                      key={i}
+                      className={`p-2 rounded-lg text-sm ${
+                        msg.includes("✅")
+                          ? "bg-green-50 text-green-700"
+                          : msg.includes("🎯") || msg.includes("📊")
+                          ? "bg-blue-50 text-blue-700"
+                          : msg.includes("🔬")
+                          ? "bg-purple-50 text-purple-700"
+                          : "bg-gray-50 text-gray-600"
                       }`}
                     >
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-2xl">
-                          {suggestions.verdictEmoji}
-                        </span>
-                        <h3 className="font-bold text-gray-900">
-                          {suggestions.verdict}
-                        </h3>
+                      {msg}
+                    </div>
+                  ))}
+                </div>
+                {currentAgent && (
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <p className="text-xs text-gray-500">
+                      Current:{" "}
+                      <span className="font-medium">{currentAgent}</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Show results when done */}
+            {result?.report && !loading && (
+              <>
+                {/* Intent Assumption Banner */}
+                {result.report.intent && (
+                  <div
+                    className={`bg-blue-50 border border-blue-200 rounded-xl p-4 ${
+                      reanalyzeLoading ? "opacity-70" : ""
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-blue-800">
+                          🎯 {result.report.intent.assumption}
+                        </p>
+                        {result.report.filter?.explanation && (
+                          <p className="text-xs text-blue-600 mt-1">
+                            📊 {result.report.filter.explanation}
+                          </p>
+                        )}
                       </div>
 
-                      {/* Concerns */}
-                      {suggestions.concerns &&
-                        suggestions.concerns.length > 0 && (
-                          <div className="mt-3">
-                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">
-                              Issues Found
+                      {/* Alternative intents - clickable to re-analyze */}
+                      {result.report.intent.alternatives?.length > 0 &&
+                        !result.report.intent.isOverride && (
+                          <div className="flex flex-col items-end gap-2">
+                            <p className="text-xs text-blue-600 font-medium">
+                              Not your goal?
                             </p>
-                            {suggestions.concerns.map((c, i) => (
-                              <div
-                                key={i}
-                                className="mb-2 pl-3 border-l-2 border-red-300"
-                              >
-                                <p className="text-sm font-medium text-gray-800">
-                                  {c.nutrient}:{" "}
-                                  <span className="text-red-600">
-                                    {c.value}
-                                  </span>
-                                </p>
-                                <p className="text-xs text-gray-600">
-                                  {c.reason}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                      {/* Positives */}
-                      {suggestions.positives &&
-                        suggestions.positives.length > 0 && (
-                          <div className="mt-3">
-                            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">
-                              Positives
-                            </p>
-                            {suggestions.positives.map((p, i) => (
-                              <div
-                                key={i}
-                                className="mb-2 pl-3 border-l-2 border-green-300"
-                              >
-                                <p className="text-sm font-medium text-gray-800">
-                                  {p.nutrient}:{" "}
-                                  <span className="text-green-600">
-                                    {p.value}
-                                  </span>
-                                </p>
-                                <p className="text-xs text-gray-600">
-                                  {p.reason}
-                                </p>
-                              </div>
-                            ))}
+                            <div className="flex flex-wrap justify-end gap-1">
+                              {result.report.intent.alternatives
+                                .slice(0, 3)
+                                .map((alt, i) => (
+                                  <button
+                                    key={i}
+                                    disabled={reanalyzeLoading}
+                                    className={`text-xs px-3 py-1.5 rounded-lg transition-all ${
+                                      reanalyzeLoading
+                                        ? "bg-gray-100 text-gray-400 cursor-wait"
+                                        : "bg-white text-blue-700 border border-blue-300 hover:bg-blue-100 hover:border-blue-400"
+                                    }`}
+                                    onClick={() => handleIntentOverride(alt)}
+                                  >
+                                    {alt.replace(/_/g, " ")}
+                                  </button>
+                                ))}
+                            </div>
                           </div>
                         )}
                     </div>
 
-                    {/* Follow-up Questions */}
-                    {suggestions.followUpQuestions &&
-                      suggestions.followUpQuestions.length > 0 && (
-                        <div>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                            Ask the Copilot
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {suggestions.followUpQuestions.map((q, i) => (
-                              <button
-                                key={i}
-                                onClick={() =>
-                                  navigate(`/chat?q=${encodeURIComponent(q)}`, {
-                                    state: { productContext: result },
-                                  })
-                                }
-                                className="px-3 py-2 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors border border-green-200"
-                              >
-                                💬 {q}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                    {/* Custom question button */}
-                    <button
-                      onClick={() =>
-                        navigate("/chat", { state: { productContext: result } })
-                      }
-                      className="w-full py-2.5 px-4 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
-                    >
-                      💬 Ask a different question
-                    </button>
+                    {/* Re-analyze loading indicator */}
+                    {reanalyzeLoading && (
+                      <div className="mt-3 pt-3 border-t border-blue-200 flex items-center gap-2">
+                        <span className="w-4 h-4 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin" />
+                        <p className="text-xs text-blue-600">
+                          Re-analyzing with new goal...
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
-            ) : (
+
+                {/* Analysis Verdict */}
+                {result.report.analysis && (
+                  <div
+                    className={`p-4 rounded-xl border-2 ${
+                      result.report.analysis.verdict?.includes("AVOID") ||
+                      result.report.analysis.verdict?.includes("NOT")
+                        ? "bg-red-50 border-red-200"
+                        : result.report.analysis.verdict?.includes("CAUTION") ||
+                          result.report.analysis.verdict?.includes("NOT IDEAL")
+                        ? "bg-amber-50 border-amber-200"
+                        : result.report.analysis.verdict?.includes("GREAT") ||
+                          result.report.analysis.verdict?.includes("GOOD")
+                        ? "bg-green-50 border-green-200"
+                        : "bg-gray-50 border-gray-200"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-2xl">
+                        {result.report.analysis.verdictEmoji || "⚡"}
+                      </span>
+                      <h3 className="font-bold text-gray-900">
+                        {result.report.analysis.verdict}
+                      </h3>
+                    </div>
+
+                    {(typingText || result.report.analysis.analysis) && (
+                      <p className="text-sm text-gray-700 mb-3">
+                        {typingText || result.report.analysis.analysis}
+                        {typingText &&
+                          typingText.length <
+                            (result.report.analysis.analysis?.length || 0) && (
+                            <span className="animate-pulse">▋</span>
+                          )}
+                      </p>
+                    )}
+
+                    {/* Concerns */}
+                    {result.report.analysis.concerns?.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">
+                          Issues Found
+                        </p>
+                        {result.report.analysis.concerns.map((c, i) => (
+                          <div
+                            key={i}
+                            className="mb-2 pl-3 border-l-2 border-red-300"
+                          >
+                            <p className="text-sm font-medium text-gray-800">
+                              {c.nutrient}:{" "}
+                              <span className="text-red-600">{c.value}</span>
+                            </p>
+                            <p className="text-xs text-gray-600">{c.issue}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Positives */}
+                    {result.report.analysis.positives?.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">
+                          Positives
+                        </p>
+                        {result.report.analysis.positives.map((p, i) => (
+                          <div
+                            key={i}
+                            className="mb-2 pl-3 border-l-2 border-green-300"
+                          >
+                            <p className="text-sm font-medium text-gray-800">
+                              {p.nutrient}:{" "}
+                              <span className="text-green-600">{p.value}</span>
+                            </p>
+                            <p className="text-xs text-gray-600">{p.benefit}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Recommendation */}
+                    {result.report.analysis.recommendation && (
+                      <p className="mt-3 text-sm font-medium text-gray-800 bg-white/50 p-2 rounded">
+                        💡 {result.report.analysis.recommendation}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Follow-up Questions */}
+                {result.report.analysis?.followUpQuestions?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                      Ask the Copilot
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {result.report.analysis.followUpQuestions.map((q, i) => (
+                        <button
+                          key={i}
+                          onClick={() =>
+                            navigate(`/chat?q=${encodeURIComponent(q)}`, {
+                              state: { productContext: result },
+                            })
+                          }
+                          className="px-3 py-2 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors border border-green-200"
+                        >
+                          💬 {q}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Nutrition Details (Collapsible) */}
+                <details className="bg-white rounded-2xl shadow-sm border border-gray-100">
+                  <summary className="p-4 cursor-pointer font-medium text-gray-700 hover:bg-gray-50">
+                    📋 View Nutrition Details ({result.report.nutrients?.length}{" "}
+                    nutrients)
+                  </summary>
+                  <div className="p-4 pt-0">
+                    <NutritionForm
+                      nutrients={result.report.nutrients}
+                      servingSize={result.report.servingSize}
+                      productName={result.report.productName}
+                    />
+                  </div>
+                </details>
+              </>
+            )}
+
+            {/* Empty state - only show when no result and not loading */}
+            {!result?.report && !loading && (
               <div className="bg-white/50 rounded-2xl p-8 border-2 border-dashed border-gray-200 min-h-[300px] flex flex-col items-center justify-center text-center">
                 <span className="text-5xl mb-4 opacity-50">📊</span>
                 <p className="text-gray-500 font-medium">

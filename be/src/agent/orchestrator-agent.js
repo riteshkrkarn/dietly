@@ -1,51 +1,16 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import { HumanMessage } from "@langchain/core/messages";
-import {
-  allTools,
-  parseNutritionLabel,
-  getNutritionSuggestions,
-} from "./tools/nutrition-tools.js";
+import { parseNutritionData } from "./parser-agent.js";
+import { inferUserIntent } from "./intent-agent.js";
+import { filterNutrientsByIntent } from "./filter-agent.js";
+import { analyzeNutrients } from "./analysis-agent.js";
 import { agentLogger } from "./agent-logger.js";
 
 // ============================================
 // ORCHESTRATOR AGENT
-// ============================================
-
-const createOrchestratorAgent = () => {
-  const model = new ChatGoogleGenerativeAI({
-    model: "gemini-2.5-flash",
-    apiKey: process.env.GEMINI_API_KEY,
-    temperature: 0,
-  });
-
-  return model.bindTools(allTools);
-};
-
-/**
- * Tool executor - maps tool names to functions
- */
-const toolRegistry = {
-  parse_nutrition_label: parseNutritionLabel,
-  get_nutrition_suggestions: getNutritionSuggestions,
-};
-
-/**
- * Execute a tool by name
- */
-const executeToolByName = async (toolName, args) => {
-  const tool = toolRegistry[toolName];
-  if (!tool) {
-    throw new Error(`Unknown tool: ${toolName}`);
-  }
-  return await tool.invoke(args);
-};
-
-// ============================================
-// MAIN PROCESSING FUNCTION
+// Coordinates the multi-agent pipeline
 // ============================================
 
 /**
- * Process user request through the orchestrator
+ * Process nutrition label through agent pipeline
  * @param {string} rawText - OCR text from nutrition label
  * @param {function} onEvent - Callback for real-time events
  */
@@ -53,90 +18,123 @@ export const processWithOrchestrator = async (rawText, onEvent) => {
   const sessionId = agentLogger.startSession();
   onEvent({ type: "session_start", sessionId });
 
-  const agent = createOrchestratorAgent();
-
-  // Prompt for the orchestrator
-  const userMessage = `You are a nutrition analysis assistant with access to tools.
-
-Use the parse_nutrition_label tool to extract nutrition information from this OCR text:
-
-${rawText}
-
-Call the appropriate tool to process this.`;
-
-  agentLogger.logThinking("Analyzing request to determine which tool to use");
-  onEvent({
-    type: "thinking",
-    message: "🧠 Orchestrator analyzing request...",
-  });
-
   try {
-    // Step 1: Agent decides which tool to call
-    const response = await agent.invoke([new HumanMessage(userMessage)]);
+    // ========== STEP 1: PARSER AGENT ==========
+    onEvent({
+      type: "agent_start",
+      agent: "Parser Agent",
+      message: "📋 Parser Agent: Extracting nutrition data...",
+    });
 
-    // Step 2: Check if agent wants to call a tool
-    if (response.tool_calls && response.tool_calls.length > 0) {
-      const toolCall = response.tool_calls[0];
+    const parsedData = await parseNutritionData(rawText);
 
-      agentLogger.logToolSelected(toolCall.name, "Selected based on request");
-      onEvent({
-        type: "tool_selected",
-        tool: toolCall.name,
-        message: `🔧 Selected: ${toolCall.name}`,
-      });
-
-      // Step 3: Execute the tool
-      agentLogger.logToolExecuting(toolCall.name, toolCall.args);
-      onEvent({
-        type: "tool_executing",
-        tool: toolCall.name,
-        message: `⚙️ Executing ${toolCall.name}...`,
-      });
-
-      const toolResult = await executeToolByName(toolCall.name, toolCall.args);
-
-      agentLogger.logToolResult(toolCall.name, toolResult);
-      onEvent({
-        type: "tool_result",
-        tool: toolCall.name,
-        message: "✅ Tool completed",
-      });
-
-      // Step 4: Parse and return result
-      let report = null;
-      try {
-        report = JSON.parse(toolResult);
-        report.analyzedAt = new Date().toISOString();
-        report.summary = { totalNutrients: report.nutrients?.length || 0 };
-      } catch (e) {
-        console.error("Failed to parse tool result:", e);
-      }
-
-      const resultData = {
-        success: true,
-        toolsUsed: [{ tool: toolCall.name, args: toolCall.args }],
-        report,
-        logs: agentLogger.endSession({
-          nutrientsFound: report?.nutrients?.length || 0,
-        }),
-      };
-
-      onEvent({ type: "complete", data: resultData });
-      return resultData;
-    } else {
-      // No tool call - direct response
-      agentLogger.logThinking("No tool needed, responding directly");
-
-      const resultData = {
-        success: true,
-        toolsUsed: [],
-        agentResponse: response.content,
-        logs: agentLogger.endSession({ directResponse: true }),
-      };
-
-      onEvent({ type: "complete", data: resultData });
-      return resultData;
+    if (!parsedData.success) {
+      throw new Error("Parser Agent failed to extract nutrition data");
     }
+
+    onEvent({
+      type: "agent_complete",
+      agent: "Parser Agent",
+      message: `✅ Extracted ${parsedData.nutrients?.length || 0} nutrients`,
+    });
+
+    agentLogger.logToolResult("parser_agent", parsedData);
+
+    // ========== STEP 2: INTENT AGENT ==========
+    onEvent({
+      type: "agent_start",
+      agent: "Intent Agent",
+      message: "🎯 Intent Agent: Inferring your goal...",
+    });
+
+    const intentData = await inferUserIntent(
+      parsedData.productName,
+      parsedData.nutrients
+    );
+
+    onEvent({
+      type: "agent_complete",
+      agent: "Intent Agent",
+      message: `✅ ${intentData.assumption}`,
+    });
+
+    agentLogger.logToolResult("intent_agent", intentData);
+
+    // ========== STEP 3: FILTER AGENT ==========
+    onEvent({
+      type: "agent_start",
+      agent: "Filter Agent",
+      message: "📊 Filter Agent: Focusing on what matters...",
+    });
+
+    const filterData = await filterNutrientsByIntent(
+      parsedData.nutrients,
+      intentData.intent,
+      intentData.assumption
+    );
+
+    onEvent({
+      type: "agent_complete",
+      agent: "Filter Agent",
+      message: `✅ ${filterData.explanation}`,
+    });
+
+    agentLogger.logToolResult("filter_agent", filterData);
+
+    // ========== STEP 4: ANALYSIS AGENT ==========
+    onEvent({
+      type: "agent_start",
+      agent: "Analysis Agent",
+      message: "🔬 Analysis Agent: Generating verdict...",
+    });
+
+    const analysisData = await analyzeNutrients(
+      filterData.relevant,
+      filterData.filtered,
+      intentData,
+      parsedData.productName
+    );
+
+    onEvent({
+      type: "agent_complete",
+      agent: "Analysis Agent",
+      message: `✅ Verdict: ${analysisData.verdict}`,
+    });
+
+    agentLogger.logToolResult("analysis_agent", analysisData);
+
+    // ========== BUILD RESULT ==========
+    const report = {
+      ...parsedData,
+      intent: intentData,
+      filter: filterData,
+      analysis: analysisData,
+      analyzedAt: new Date().toISOString(),
+      summary: {
+        totalNutrients: parsedData.nutrients?.length || 0,
+        relevantNutrients: filterData.relevant?.length || 0,
+        filteredNutrients: filterData.filtered?.length || 0,
+      },
+    };
+
+    const resultData = {
+      success: true,
+      agentsUsed: [
+        "Parser Agent",
+        "Intent Agent",
+        "Filter Agent",
+        "Analysis Agent",
+      ],
+      report,
+      logs: agentLogger.endSession({
+        nutrientsFound: report.nutrients?.length || 0,
+        intent: intentData.intent,
+        verdict: analysisData.verdict,
+      }),
+    };
+
+    onEvent({ type: "complete", data: resultData });
+    return resultData;
   } catch (error) {
     console.error("❌ Orchestrator Error:", error.message);
     agentLogger.logError(error);
@@ -147,10 +145,58 @@ Call the appropriate tool to process this.`;
     return {
       success: false,
       error: error.message,
-      toolsUsed: [],
+      agentsUsed: [],
       logs,
     };
   }
+};
+
+/**
+ * Re-analyze with a specific intent (for intent override)
+ * @param {object} parsedData - Already parsed nutrition data
+ * @param {string} newIntent - The new intent to use
+ * @returns {object} New analysis result
+ */
+export const reAnalyzeWithIntent = async (parsedData, newIntent) => {
+  console.log("🔄 Re-analyzing with intent:", newIntent);
+
+  // Create intent data with the overridden intent
+  const intentData = {
+    success: true,
+    intent: newIntent,
+    confidence: 1.0,
+    assumption: `I'm now analyzing this for ${newIntent.replace("_", " ")}`,
+    reasoning: "User selected this intent",
+    alternatives: [],
+    isOverride: true,
+  };
+
+  // Run filter with new intent
+  const filterData = await filterNutrientsByIntent(
+    parsedData.nutrients,
+    newIntent,
+    intentData.assumption
+  );
+
+  // Run analysis with new intent
+  const analysisData = await analyzeNutrients(
+    filterData.relevant,
+    filterData.filtered,
+    intentData,
+    parsedData.productName
+  );
+
+  return {
+    success: true,
+    intent: intentData,
+    filter: filterData,
+    analysis: analysisData,
+    summary: {
+      totalNutrients: parsedData.nutrients?.length || 0,
+      relevantNutrients: filterData.relevant?.length || 0,
+      filteredNutrients: filterData.filtered?.length || 0,
+    },
+  };
 };
 
 // ============================================
