@@ -1,5 +1,5 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { createModel, DEFAULT_MODEL } from "./model-config.js";
 
 // ============================================
 // PARSER AGENT
@@ -32,13 +32,10 @@ Rules:
 
 /**
  * Create the Parser Agent
+ * @param {string} modelId - optional model override
  */
-const createParserAgent = () => {
-  return new ChatGoogleGenerativeAI({
-    model: "gemini-2.5-flash",
-    apiKey: process.env.GEMINI_API_KEY,
-    temperature: 0,
-  });
+const createParserAgent = (modelId = DEFAULT_MODEL) => {
+  return createModel(modelId, 0);
 };
 
 /**
@@ -46,8 +43,8 @@ const createParserAgent = () => {
  * @param {string} ocrText - Raw OCR text from image
  * @returns {object} Parsed nutrition data
  */
-export const parseNutritionData = async (ocrText) => {
-  const agent = createParserAgent();
+export const parseNutritionData = async (ocrText, modelId = DEFAULT_MODEL) => {
+  const agent = createParserAgent(modelId);
 
   const messages = [
     new SystemMessage(PARSER_SYSTEM_PROMPT),

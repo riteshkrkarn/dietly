@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { usePreferences } from "../hooks/usePreferences";
+import { useModel } from "../hooks/useModel";
 
 const Chat = () => {
   const [searchParams] = useSearchParams();
@@ -17,6 +18,7 @@ const Chat = () => {
 
   const { savePreference, getPreferenceLabels, hasPreference } =
     usePreferences();
+  const { selectedModel, currentModelInfo } = useModel();
 
   const productContext = location.state?.productContext || null;
 
@@ -65,6 +67,7 @@ const Chat = () => {
             productContext,
             chatHistory: currentHistory.slice(-10),
             userPreferences: getPreferenceLabels(),
+            model: selectedModel,
           }),
         }
       );

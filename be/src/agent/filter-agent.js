@@ -1,5 +1,5 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { createModel, DEFAULT_MODEL } from "./model-config.js";
 
 // ============================================
 // FILTER AGENT
@@ -57,13 +57,10 @@ Rules:
 
 /**
  * Create the Filter Agent
+ * @param {string} modelId - optional model override
  */
-const createFilterAgent = () => {
-  return new ChatGoogleGenerativeAI({
-    model: "gemini-2.5-flash",
-    apiKey: process.env.GEMINI_API_KEY,
-    temperature: 0,
-  });
+const createFilterAgent = (modelId = DEFAULT_MODEL) => {
+  return createModel(modelId, 0);
 };
 
 /**
@@ -76,7 +73,8 @@ const createFilterAgent = () => {
 export const filterNutrientsByIntent = async (
   nutrients,
   intent,
-  assumption
+  assumption,
+  modelId = DEFAULT_MODEL
 ) => {
   // Quick path: if few nutrients, don't filter
   if (nutrients.length <= 4) {
@@ -101,7 +99,7 @@ export const filterNutrientsByIntent = async (
   }
 
   // Fall back to LLM for complex cases
-  const agent = createFilterAgent();
+  const agent = createFilterAgent(modelId);
 
   const nutrientList = nutrients
     .map((n) => `${n.name}: ${n.value}${n.unit}`)

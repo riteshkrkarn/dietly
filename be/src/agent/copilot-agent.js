@@ -1,9 +1,5 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import {
-  HumanMessage,
-  SystemMessage,
-  AIMessage,
-} from "@langchain/core/messages";
+import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
+import { createModel, DEFAULT_MODEL } from "./model-config.js";
 
 // ============================================
 // COPILOT AGENT - Contextual Chat
@@ -64,13 +60,10 @@ ${scanHistory.map((s, i) => `${i + 1}. ${s.name} (scanned ${new Date(s.scannedAt
 
 /**
  * Create the copilot chat model
+ * @param {string} modelId - optional model override
  */
-const createCopilotAgent = () => {
-  return new ChatGoogleGenerativeAI({
-    model: "gemini-2.5-flash",
-    apiKey: process.env.GEMINI_API_KEY,
-    temperature: 0.7,
-  });
+const createCopilotAgent = (modelId = DEFAULT_MODEL) => {
+  return createModel(modelId, 0.7);
 };
 
 /**
@@ -110,9 +103,10 @@ export const processCopilotChat = async (
   productContext,
   chatHistory = [],
   userPreferences = [],
-  scanHistory = []
+  scanHistory = [],
+  modelId = DEFAULT_MODEL
 ) => {
-  const agent = createCopilotAgent();
+  const agent = createCopilotAgent(modelId);
 
   // Build context with user preferences and scan history
   const productInfo = formatProductContext(productContext);

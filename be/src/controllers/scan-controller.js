@@ -8,6 +8,7 @@ import { getNutritionSuggestions } from "../agent/tools/nutrition-tools.js";
 import { asyncHandler } from "../utils/async-handler.js";
 import { ApiResponse } from "../utils/api-response.js";
 import { ApiError } from "../utils/api-error.js";
+import { ALL_MODELS, DEFAULT_MODEL } from "../agent/model-config.js";
 import fs from "fs";
 
 /**
@@ -51,14 +52,15 @@ export const scanAndAnalyzeNutrition = asyncHandler(async (req, res) => {
   }
 
   const imagePath = req.file.path;
+  const modelId = (req.body.model && ALL_MODELS[req.body.model]) ? req.body.model : DEFAULT_MODEL;
 
   try {
     console.log("📸 Extracting text from image...");
     const extractedText = await extractTextFromImage(imagePath);
     console.log("✅ Text extracted");
 
-    console.log("🤖 Processing with AI agent...");
-    const nutritionData = await processNutritionText(extractedText);
+    console.log("🤖 Processing with AI agent... Model:", modelId);
+    const nutritionData = await processNutritionText(extractedText, modelId);
     console.log("✅ Nutrition data extracted");
 
     fs.unlink(imagePath, (err) => {
@@ -71,6 +73,7 @@ export const scanAndAnalyzeNutrition = asyncHandler(async (req, res) => {
         {
           rawText: extractedText,
           nutrition: nutritionData,
+          modelUsed: modelId,
         },
         "Nutrition data extracted successfully"
       )
@@ -93,6 +96,7 @@ export const scanAndAnalyzeNutritionStream = async (req, res) => {
 
   const imagePath = req.file.path;
   const socketId = req.query.socketId; // Get socket ID from query
+  const modelId = (req.query.model && ALL_MODELS[req.query.model]) ? req.query.model : DEFAULT_MODEL;
   const io = req.app.get("io");
 
   // Set up SSE headers
@@ -129,7 +133,7 @@ export const scanAndAnalyzeNutritionStream = async (req, res) => {
 
     await processNutritionTextWithStreaming(extractedText, (event) => {
       sendEvent(event);
-    });
+    }, modelId);
 
     // Clean up
     fs.unlink(imagePath, () => {});
@@ -174,7 +178,7 @@ export const getSuggestions = asyncHandler(async (req, res) => {
  * Re-analyze with a different intent
  */
 export const reanalyze = asyncHandler(async (req, res) => {
-  const { nutrients, productName, newIntent } = req.body;
+  const { nutrients, productName, newIntent, model } = req.body;
 
   if (!nutrients || !Array.isArray(nutrients)) {
     throw new ApiError(400, "Please provide nutrients array");
@@ -183,7 +187,8 @@ export const reanalyze = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Please provide newIntent");
   }
 
-  console.log("🔄 Re-analyzing with intent:", newIntent);
+  const modelId = (model && ALL_MODELS[model]) ? model : DEFAULT_MODEL;
+  console.log("🔄 Re-analyzing with intent:", newIntent, "| Model:", modelId);
 
   const parsedData = {
     nutrients,
@@ -191,7 +196,7 @@ export const reanalyze = asyncHandler(async (req, res) => {
     success: true,
   };
 
-  const result = await reAnalyzeWithIntent(parsedData, newIntent);
+  const result = await reAnalyzeWithIntent(parsedData, newIntent, modelId);
 
   console.log("✅ Re-analysis complete:", result.analysis?.verdict);
 

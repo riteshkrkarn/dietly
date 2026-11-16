@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, useScroll, useMotionValueEvent } from "framer-motion";
+import ModelSelector from "./ModelSelector";
 
 const Navbar = () => {
     const location = useLocation();
@@ -229,6 +230,9 @@ const Navbar = () => {
 
                     {/* CTA Buttons - Desktop */}
                     <div className="hidden md:flex items-center gap-3">
+                        {/* Model Selector */}
+                        <ModelSelector />
+
                         {/* Login Button with Shimmer & 3D Effect */}
                         <motion.button
                             variants={buttonVariants}
@@ -412,6 +416,11 @@ const Navbar = () => {
                             className="md:hidden overflow-hidden"
                         >
                             <div className="mt-4 pt-4 border-t border-gray-200 space-y-2">
+                                {/* Model selector in mobile menu */}
+                                <div className="px-2 pb-2 flex items-center gap-2">
+                                    <span className="text-xs text-gray-500 font-medium">AI Model:</span>
+                                    <ModelSelector />
+                                </div>
                                 {navLinks.map((link) => (
                                     <motion.div
                                         key={link.path}

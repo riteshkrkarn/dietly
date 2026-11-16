@@ -3,6 +3,7 @@ import { inferUserIntent } from "./intent-agent.js";
 import { filterNutrientsByIntent } from "./filter-agent.js";
 import { analyzeNutrients } from "./analysis-agent.js";
 import { agentLogger } from "./agent-logger.js";
+import { DEFAULT_MODEL } from "./model-config.js";
 
 // ============================================
 // ORCHESTRATOR AGENT
@@ -13,8 +14,9 @@ import { agentLogger } from "./agent-logger.js";
  * Process nutrition label through agent pipeline
  * @param {string} rawText - OCR text from nutrition label
  * @param {function} onEvent - Callback for real-time events
+ * @param {string} modelId - Model to use for all agents
  */
-export const processWithOrchestrator = async (rawText, onEvent) => {
+export const processWithOrchestrator = async (rawText, onEvent, modelId = DEFAULT_MODEL) => {
   const sessionId = agentLogger.startSession();
   onEvent({ type: "session_start", sessionId });
 
@@ -26,7 +28,7 @@ export const processWithOrchestrator = async (rawText, onEvent) => {
       message: "📋 Parser Agent: Extracting nutrition data...",
     });
 
-    const parsedData = await parseNutritionData(rawText);
+    const parsedData = await parseNutritionData(rawText, modelId);
 
     if (!parsedData.success) {
       throw new Error("Parser Agent failed to extract nutrition data");
@@ -49,7 +51,8 @@ export const processWithOrchestrator = async (rawText, onEvent) => {
 
     const intentData = await inferUserIntent(
       parsedData.productName,
-      parsedData.nutrients
+      parsedData.nutrients,
+      modelId
     );
 
     onEvent({
@@ -70,7 +73,8 @@ export const processWithOrchestrator = async (rawText, onEvent) => {
     const filterData = await filterNutrientsByIntent(
       parsedData.nutrients,
       intentData.intent,
-      intentData.assumption
+      intentData.assumption,
+      modelId
     );
 
     onEvent({
@@ -92,7 +96,8 @@ export const processWithOrchestrator = async (rawText, onEvent) => {
       filterData.relevant,
       filterData.filtered,
       intentData,
-      parsedData.productName
+      parsedData.productName,
+      modelId
     );
 
     onEvent({
@@ -157,7 +162,7 @@ export const processWithOrchestrator = async (rawText, onEvent) => {
  * @param {string} newIntent - The new intent to use
  * @returns {object} New analysis result
  */
-export const reAnalyzeWithIntent = async (parsedData, newIntent) => {
+export const reAnalyzeWithIntent = async (parsedData, newIntent, modelId = DEFAULT_MODEL) => {
   console.log("🔄 Re-analyzing with intent:", newIntent);
 
   // Create intent data with the overridden intent
@@ -175,7 +180,8 @@ export const reAnalyzeWithIntent = async (parsedData, newIntent) => {
   const filterData = await filterNutrientsByIntent(
     parsedData.nutrients,
     newIntent,
-    intentData.assumption
+    intentData.assumption,
+    modelId
   );
 
   // Run analysis with new intent
@@ -183,7 +189,8 @@ export const reAnalyzeWithIntent = async (parsedData, newIntent) => {
     filterData.relevant,
     filterData.filtered,
     intentData,
-    parsedData.productName
+    parsedData.productName,
+    modelId
   );
 
   return {
@@ -206,12 +213,12 @@ export const reAnalyzeWithIntent = async (parsedData, newIntent) => {
 // For backwards compatibility with existing code
 export const processNutritionTextWithStreaming = processWithOrchestrator;
 
-export const processNutritionText = async (rawText) => {
+export const processNutritionText = async (rawText, modelId = DEFAULT_MODEL) => {
   let result = null;
   await processWithOrchestrator(rawText, (event) => {
     if (event.type === "complete") {
       result = event.data;
     }
-  });
+  }, modelId);
   return result;
 };

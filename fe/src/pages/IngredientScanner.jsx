@@ -2,9 +2,11 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import NutritionForm from "../components/NutritionForm";
+import { useModel } from "../hooks/useModel";
 
 const IngredientScanner = () => {
   const navigate = useNavigate();
+  const { selectedModel } = useModel();
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [result, setResult] = useState(null);
@@ -134,7 +136,7 @@ const IngredientScanner = () => {
       const response = await fetch(
         `${
           import.meta.env.VITE_API_URL || "http://localhost:8000"
-        }/api/v1/scan/analyze/stream?socketId=${socketId}`,
+        }/api/v1/scan/analyze/stream?socketId=${socketId}&model=${selectedModel}`,
         { method: "POST", body: formData }
       );
 
@@ -220,6 +222,7 @@ const IngredientScanner = () => {
             nutrients: result.report.nutrients,
             productName: result.report.productName,
             newIntent: newIntent,
+            model: selectedModel,
           }),
         }
       );
